@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock @vercel/kv before importing our module
-vi.mock('@vercel/kv', () => ({
-  kv: {
-    get: vi.fn(),
-    set: vi.fn(),
-  },
+const mockGet = vi.fn()
+const mockSet = vi.fn()
+
+vi.mock('redis', () => ({
+  createClient: vi.fn(() => ({
+    connect: vi.fn().mockResolvedValue(undefined),
+    get: mockGet,
+    set: mockSet,
+    on: vi.fn(),
+  })),
 }))
 
-import { kv } from '@vercel/kv'
 import { getProgress, setProgress } from './kv'
 
 beforeEach(() => {
@@ -17,15 +20,15 @@ beforeEach(() => {
 
 describe('getProgress', () => {
   it('returns empty object when no progress stored', async () => {
-    vi.mocked(kv.get).mockResolvedValue(null)
+    mockGet.mockResolvedValue(null)
     const result = await getProgress('danja')
     expect(result).toEqual({})
-    expect(kv.get).toHaveBeenCalledWith('progress:danja')
+    expect(mockGet).toHaveBeenCalledWith('progress:danja')
   })
 
   it('returns stored progress', async () => {
     const stored = { 'netzwerke-osi': true, 'vlan-vpn-dns-dhcp': false }
-    vi.mocked(kv.get).mockResolvedValue(stored)
+    mockGet.mockResolvedValue(JSON.stringify(stored))
     const result = await getProgress('danja')
     expect(result).toEqual(stored)
   })
@@ -34,15 +37,15 @@ describe('getProgress', () => {
 describe('setProgress', () => {
   it('merges new value into existing progress and saves', async () => {
     const existing = { 'netzwerke-osi': true }
-    vi.mocked(kv.get).mockResolvedValue(existing)
-    vi.mocked(kv.set).mockResolvedValue('OK')
+    mockGet.mockResolvedValue(JSON.stringify(existing))
+    mockSet.mockResolvedValue('OK')
 
     const result = await setProgress('danja', 'vlan-vpn-dns-dhcp', true)
 
-    expect(kv.set).toHaveBeenCalledWith('progress:danja', {
+    expect(mockSet).toHaveBeenCalledWith('progress:danja', JSON.stringify({
       'netzwerke-osi': true,
       'vlan-vpn-dns-dhcp': true,
-    })
+    }))
     expect(result).toEqual({
       'netzwerke-osi': true,
       'vlan-vpn-dns-dhcp': true,
@@ -51,8 +54,8 @@ describe('setProgress', () => {
 
   it('can uncheck a topic', async () => {
     const existing = { 'netzwerke-osi': true }
-    vi.mocked(kv.get).mockResolvedValue(existing)
-    vi.mocked(kv.set).mockResolvedValue('OK')
+    mockGet.mockResolvedValue(JSON.stringify(existing))
+    mockSet.mockResolvedValue('OK')
 
     const result = await setProgress('danja', 'netzwerke-osi', false)
     expect(result['netzwerke-osi']).toBe(false)
