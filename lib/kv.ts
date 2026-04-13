@@ -2,8 +2,12 @@ import { kv } from '@vercel/kv'
 import type { UserId, Progress } from './types'
 
 export async function getProgress(user: UserId): Promise<Progress> {
-  const data = await kv.get<Progress>(`progress:${user}`)
-  return data ?? {}
+  try {
+    const data = await kv.get<Progress>(`progress:${user}`)
+    return data ?? {}
+  } catch {
+    return {}
+  }
 }
 
 export async function setProgress(
